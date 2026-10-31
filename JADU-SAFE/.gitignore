@@ -1,0 +1,5 @@
+backend/*.db*
+node_modules/
+dist/
+venv/
+__pycache__/

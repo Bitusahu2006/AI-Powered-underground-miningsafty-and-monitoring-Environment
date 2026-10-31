@@ -1,0 +1,22 @@
+
+> jadu-safe-dashboard@0.1.0 dev
+> vite --host 0.0.0.0
+
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m481[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.30.59:[1m5173[22m/[39m
+[2m9:30:59 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/DigitalTwin.jsx[22m
+[2m9:33:46 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/DigitalTwin.jsx[22m
+[2m9:33:57 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/styles.css[22m
+[2m9:37:49 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/DigitalTwin.jsx[22m
+[2m9:37:58 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/DigitalTwin.jsx[22m
+[2m9:38:02 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/styles.css[22m
+[2m9:47:49 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.jsx[22m
+[2m9:47:53 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/App.jsx[22m
+[2m9:47:58 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.jsx[22m
+[2m9:49:06 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/RiskMap.jsx[22m
+[2m9:50:09 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/RiskMap.jsx[22m
+[2m9:51:19 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/styles.css[22m
+[2m9:57:03 pm[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.jsx[22m

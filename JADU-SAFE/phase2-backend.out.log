@@ -1,0 +1,5 @@
+INFO:     127.0.0.1:58737 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58737 - "POST /api/sensors HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58737 - "GET /api/ai/status?station_id=JADU-STATION-02 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58737 - "POST /api/scenario/dust_spike HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58737 - "GET /api/sensors/latest HTTP/1.1" 200 OK

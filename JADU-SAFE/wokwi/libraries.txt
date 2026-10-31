@@ -1,0 +1,4 @@
+# Wokwi Library Manager
+DHT sensor library
+RTClib
+LiquidCrystal I2C

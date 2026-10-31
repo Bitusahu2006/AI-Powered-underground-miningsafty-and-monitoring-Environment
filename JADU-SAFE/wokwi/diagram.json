@@ -1,0 +1,450 @@
+{
+ "version": 1,
+ "author": "JADU-SAFE",
+ "editor": "wokwi",
+ "parts": [
+  {
+   "type": "wokwi-esp32-devkit-v1",
+   "id": "esp",
+   "top": 0,
+   "left": 0,
+   "attrs": {}
+  },
+  {
+   "type": "wokwi-dht22",
+   "id": "dht",
+   "top": -110,
+   "left": 170,
+   "attrs": {}
+  },
+  {
+   "type": "board-ds1307",
+   "id": "rtc",
+   "top": -110,
+   "left": -130,
+   "attrs": {}
+  },
+  {
+   "type": "wokwi-potentiometer",
+   "id": "pot_radon",
+   "top": 260,
+   "left": 0,
+   "attrs": {}
+  },
+  {
+   "type": "wokwi-potentiometer",
+   "id": "pot_gamma",
+   "top": 260,
+   "left": 80,
+   "attrs": {}
+  },
+  {
+   "type": "wokwi-potentiometer",
+   "id": "pot_pm25",
+   "top": 260,
+   "left": 160,
+   "attrs": {}
+  },
+  {
+   "type": "wokwi-potentiometer",
+   "id": "pot_ph",
+   "top": 260,
+   "left": 240,
+   "attrs": {}
+  },
+  {
+   "type": "wokwi-potentiometer",
+   "id": "pot_tds",
+   "top": 260,
+   "left": 320,
+   "attrs": {}
+  },
+  {
+   "type": "wokwi-potentiometer",
+   "id": "pot_air",
+   "top": 260,
+   "left": 400,
+   "attrs": {}
+  },
+  {
+   "type": "wokwi-led",
+   "id": "led_green",
+   "top": -60,
+   "left": 330,
+   "attrs": {
+    "color": "green"
+   }
+  },
+  {
+   "type": "wokwi-resistor",
+   "id": "r_green",
+   "top": 40,
+   "left": 320,
+   "attrs": {
+    "value": "220"
+   }
+  },
+  {
+   "type": "wokwi-led",
+   "id": "led_yellow",
+   "top": -60,
+   "left": 380,
+   "attrs": {
+    "color": "yellow"
+   }
+  },
+  {
+   "type": "wokwi-resistor",
+   "id": "r_yellow",
+   "top": 40,
+   "left": 370,
+   "attrs": {
+    "value": "220"
+   }
+  },
+  {
+   "type": "wokwi-led",
+   "id": "led_red",
+   "top": -60,
+   "left": 430,
+   "attrs": {
+    "color": "red"
+   }
+  },
+  {
+   "type": "wokwi-resistor",
+   "id": "r_red",
+   "top": 40,
+   "left": 420,
+   "attrs": {
+    "value": "220"
+   }
+  },
+  {
+   "type": "wokwi-lcd1602",
+   "id": "lcd",
+   "top": -180,
+   "left": 330,
+   "attrs": {
+    "pins": "i2c"
+   }
+  }
+ ],
+ "connections": [
+  [
+   "esp:TX0",
+   "$serialMonitor:RX",
+   ""
+  ],
+  [
+   "esp:RX0",
+   "$serialMonitor:TX",
+   ""
+  ],
+  [
+   "dht:VCC",
+   "esp:3V3",
+   "red",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "dht:GND",
+   "esp:GND.1",
+   "black",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "dht:SDA",
+   "esp:D4",
+   "green",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "rtc:5V",
+   "esp:VIN",
+   "red",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "rtc:GND",
+   "esp:GND.2",
+   "black",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "rtc:SDA",
+   "esp:D21",
+   "green",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "rtc:SCL",
+   "esp:D22",
+   "blue",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_radon:SIG",
+   "esp:D34",
+   "green",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_radon:VCC",
+   "esp:3V3",
+   "red",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_radon:GND",
+   "esp:GND.1",
+   "black",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_gamma:SIG",
+   "esp:D35",
+   "green",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_gamma:VCC",
+   "esp:3V3",
+   "red",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_gamma:GND",
+   "esp:GND.1",
+   "black",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_pm25:SIG",
+   "esp:D32",
+   "green",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_pm25:VCC",
+   "esp:3V3",
+   "red",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_pm25:GND",
+   "esp:GND.1",
+   "black",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_ph:SIG",
+   "esp:D33",
+   "green",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_ph:VCC",
+   "esp:3V3",
+   "red",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_ph:GND",
+   "esp:GND.1",
+   "black",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_tds:SIG",
+   "esp:VN",
+   "green",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_tds:VCC",
+   "esp:3V3",
+   "red",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_tds:GND",
+   "esp:GND.1",
+   "black",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_air:SIG",
+   "esp:VP",
+   "green",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_air:VCC",
+   "esp:3V3",
+   "red",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "pot_air:GND",
+   "esp:GND.1",
+   "black",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "esp:D25",
+   "r_green:1",
+   "green",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "r_green:2",
+   "led_green:A",
+   "green",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "led_green:C",
+   "esp:GND.3",
+   "black",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "esp:D26",
+   "r_yellow:1",
+   "green",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "r_yellow:2",
+   "led_yellow:A",
+   "green",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "led_yellow:C",
+   "esp:GND.3",
+   "black",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "esp:D27",
+   "r_red:1",
+   "green",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "r_red:2",
+   "led_red:A",
+   "green",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "led_red:C",
+   "esp:GND.3",
+   "black",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "lcd:VCC",
+   "esp:VIN",
+   "red",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "lcd:GND",
+   "esp:GND.3",
+   "black",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "lcd:SDA",
+   "esp:D21",
+   "green",
+   [
+    "v0"
+   ]
+  ],
+  [
+   "lcd:SCL",
+   "esp:D22",
+   "blue",
+   [
+    "v0"
+   ]
+  ]
+ ],
+ "dependencies": {}
+}

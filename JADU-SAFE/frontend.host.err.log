@@ -1,0 +1,19 @@
+[2m8:58:15 pm[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "leaflet/dist/leaflet.css" from "src/components/RiskMap.jsx". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/sahub/OneDrive/Desktop/JADU-SAFE/JADU-SAFE/frontend/src/components/RiskMap.jsx[39m:1:7
+[33m  16 |  }
+  17 |  var _s = $RefreshSig$();
+  18 |  import "leaflet/dist/leaflet.css";
+     |          ^
+  19 |  import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+  20 |  import L from "leaflet";[39m
+      at TransformPluginContext._formatError (file:///C:/Users/sahub/OneDrive/Desktop/JADU-SAFE/JADU-SAFE/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///C:/Users/sahub/OneDrive/Desktop/JADU-SAFE/JADU-SAFE/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///C:/Users/sahub/OneDrive/Desktop/JADU-SAFE/JADU-SAFE/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at async file:///C:/Users/sahub/OneDrive/Desktop/JADU-SAFE/JADU-SAFE/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 3)
+      at async TransformPluginContext.transform (file:///C:/Users/sahub/OneDrive/Desktop/JADU-SAFE/JADU-SAFE/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///C:/Users/sahub/OneDrive/Desktop/JADU-SAFE/JADU-SAFE/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///C:/Users/sahub/OneDrive/Desktop/JADU-SAFE/JADU-SAFE/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+[2m8:58:15 pm[22m [31m[1m[vite][22m[39m Pre-transform error: Failed to resolve import "leaflet/dist/leaflet.css" from "src/components/RiskMap.jsx". Does the file exist?

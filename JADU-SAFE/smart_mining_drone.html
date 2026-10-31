@@ -1,0 +1,1752 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart Mining Drone & Safety Control Centre</title>
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;overflow:hidden;background:#101010;color:white;font-family:Arial}
+
+canvas{display:block}
+
+#dashboard{
+ position:absolute;top:12px;left:12px;
+ width:350px;max-height:calc(100vh - 24px);
+ overflow-y:auto;padding:14px;
+ background:#171b20ee;border:1px solid #444;
+ border-radius:12px;z-index:5;
+}
+
+h2{font-size:18px;margin-bottom:12px}
+h3{font-size:14px;margin:0 0 8px}
+
+.controls{display:flex;gap:6px;flex-wrap:wrap}
+button{
+ border:0;border-radius:5px;padding:9px;
+ background:#a87948;color:white;
+ cursor:pointer;font-weight:bold;
+}
+button:hover{filter:brightness(1.2)}
+.start{background:#168447}
+.stop{background:#b52c2c}
+.small{font-size:11px;padding:7px}
+
+.drone-card{
+ background:#272d34;padding:10px;
+ border-radius:8px;margin-top:10px;
+ border:1px solid #454b52;
+}
+
+.row{
+ display:flex;justify-content:space-between;
+ gap:8px;font-size:12px;margin:7px 0;
+}
+
+.battery{
+ height:10px;background:#444;
+ border-radius:10px;overflow:hidden;
+}
+.battery-fill{
+ height:100%;width:100%;
+ background:#35d878;
+ transition:width .2s;
+}
+
+.progress{
+ height:6px;background:#444;
+ border-radius:10px;overflow:hidden;
+}
+.progress-fill{
+ height:100%;width:0%;background:#45aaff;
+}
+
+#help{
+ position:absolute;bottom:12px;right:12px;
+ background:#171b20dd;padding:12px;
+ border-radius:8px;font-size:12px;
+ line-height:1.7;z-index:5;
+}
+
+#viewTitle{
+ position:absolute;top:12px;right:12px;
+ padding:10px;background:#171b20dd;
+ border-radius:8px;z-index:5;font-size:12px;
+}
+
+.status{color:#a9d5ff}
+
+.sensor-section{
+ margin-top:12px;padding-top:10px;
+ border-top:1px solid #505861;
+}
+.sensor-heading{
+ font-size:13px;font-weight:bold;margin:0 0 8px;
+ color:#dce8f2;
+}
+.sensor-state,.worker-state{
+ padding:9px;border-radius:6px;text-align:center;
+ font-size:11px;font-weight:bold;margin-top:8px;
+}
+.sensor-state.normal,.worker-state.allowed{background:#14532d;color:#dcfce7}
+.sensor-state.warning{background:#92400e;color:#ffedd5}
+.sensor-state.danger,.worker-state.restricted{background:#991b1b;color:#fee2e2}
+.sensor-message{font-size:11px;line-height:1.5;margin-top:7px;color:#ffd27a}
+.clearance-btn{display:none;margin-top:8px;background:#2563eb}
+.demo-note{font-size:10px;line-height:1.45;color:#cbd5e1;margin-top:8px}
+.worker-btn{background:#2563eb;margin-top:8px}
+#evacuation-banner{display:none;position:absolute;top:72px;right:12px;z-index:8;max-width:360px;padding:12px 16px;border-radius:8px;background:#991b1b;color:#fff;font-weight:bold;box-shadow:0 0 22px #ef4444}
+</style>
+</head>
+
+<body>
+
+<div id="dashboard">
+
+<h2>MINING CONTROL CENTRE</h2>
+
+<div class="controls">
+ <button class="start" onclick="startAll()">START ALL</button>
+ <button class="stop" onclick="stopAll()">STOP ALL</button>
+</div>
+
+<div id="cards"></div>
+
+</div>
+
+<div id="evacuation-banner" role="alert">🚨 EMERGENCY: WORKERS EVACUATING</div>
+
+<div id="viewTitle">
+ <b>3D MINING SITE</b><br>
+ All Three Tunnels Visible
+</div>
+
+<div id="help">
+ <b>3D Camera Controls</b><br>
+ Drag mouse: Rotate 360°<br>
+ Scroll: Zoom in/out<br>
+ Right-click drag: Pan view<br>
+ <br>
+ <b>Drone Controls</b><br>
+ Start/Stop each drone independently<br>
+ Start All / Stop All<br>
+ Auto charging enabled<br><br>
+ <b>Worker Safety Demo</b><br>
+Admin: Start Workers from each tunnel card<br>
+Workers enter only after admin safety approval<br>
+Red beacon flashes on anomaly<br>
+Workers turn back and evacuate to entrance
+</div>
+
+<script type="importmap">
+{
+ "imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"
+ }
+}
+</script>
+
+<script type="module">
+
+import * as THREE from 'three';
+
+// ===================================
+// CONFIGURATION
+// ===================================
+
+const CONFIG = {
+ tunnelLength:60,
+ tunnelRadius:3,
+ droneSpeed:3.5,
+ batteryDrain:0.8,
+ lowBattery:35,
+ chargeRate:25,
+ fullBattery:100,
+ stationSpacing:12
+};
+
+// ===================================
+// ENVIRONMENT SENSOR DEMO SETTINGS
+// All thresholds below are illustrative demo values,
+// NOT approved mine-safety exposure limits.
+// ===================================
+
+const SENSOR_CONFIG = {
+ updateInterval:1000,
+ safeClearanceMs:10000,
+ demoLimits:{
+  methane:{warning:1.0,critical:1.5},
+  co:{warning:25,critical:50},
+  h2s:{warning:5,critical:10},
+  oxygen:{lowWarning:19.5,lowCritical:18},
+  temperature:{warning:35,critical:40}
+ }
+};
+
+const X_POSITIONS=[-8.5,0,8.5];
+
+const START_Z=5;
+const END_Z=-57;
+
+const scene=new THREE.Scene();
+
+scene.background=new THREE.Color(0x15130f);
+scene.fog=new THREE.Fog(0x15130f,55,120);
+
+const camera=new THREE.PerspectiveCamera(
+ 55,innerWidth/innerHeight,.1,250
+);
+
+const renderer=new THREE.WebGLRenderer({
+ antialias:true
+});
+
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(
+ 0xffffff,0x30251b,1.4
+));
+
+const mainLight=new THREE.DirectionalLight(0xffffff,1.5);
+mainLight.position.set(-15,25,15);
+mainLight.castShadow=true;
+scene.add(mainLight);
+
+// ===================================
+// MATERIALS
+// ===================================
+
+const wood=new THREE.MeshStandardMaterial({
+ color:0x684326,roughness:1
+});
+
+const metal=new THREE.MeshStandardMaterial({
+ color:0x777777,metalness:.6,roughness:.5
+});
+
+const rockMaterials=[
+ 0x66594c,0x514e49,0x71604c
+].map(color=>new THREE.MeshStandardMaterial({
+ color,roughness:1,side:THREE.BackSide
+}));
+
+const groundMaterial=new THREE.MeshStandardMaterial({
+ color:0x39342d,roughness:1
+});
+
+// ===================================
+// LIGHT AND LABEL HELPERS
+// ===================================
+
+function makeLabel(text){
+
+ const canvas=document.createElement('canvas');
+ canvas.width=512;
+ canvas.height=128;
+
+ const ctx=canvas.getContext('2d');
+
+ ctx.fillStyle='#18222b';
+ ctx.fillRect(0,0,512,128);
+
+ ctx.fillStyle='#ffffff';
+ ctx.font='bold 42px Arial';
+ ctx.textAlign='center';
+ ctx.fillText(text,256,78);
+
+ const texture=new THREE.CanvasTexture(canvas);
+
+ return new THREE.Mesh(
+  new THREE.PlaneGeometry(4,1),
+  new THREE.MeshBasicMaterial({
+   map:texture,
+   transparent:true,
+   side:THREE.DoubleSide
+  })
+ );
+}
+
+// ===================================
+// TUNNEL CREATION
+// ===================================
+
+const tunnels=[];
+const allStations=[];
+const tunnelSafety=[];
+
+function createTunnel(index){
+
+ const group=new THREE.Group();
+
+ const centerX=X_POSITIONS[index];
+
+ group.position.x=centerX;
+
+ // Tunnel shell
+ const shell=new THREE.Mesh(
+  new THREE.CylinderGeometry(
+   3,3,CONFIG.tunnelLength,24,1,true
+  ),
+  rockMaterials[index]
+ );
+
+ shell.rotation.x=Math.PI/2;
+ shell.position.z=-30;
+ group.add(shell);
+
+ // Ground
+ const floor=new THREE.Mesh(
+  new THREE.BoxGeometry(6,.3,60),
+  groundMaterial
+ );
+
+ floor.position.set(0,-2.9,-30);
+ floor.receiveShadow=true;
+ group.add(floor);
+
+ // Supports
+ for(let z=2;z>-60;z-=4){
+
+  [-2.7,2.7].forEach(x=>{
+
+   const pillar=new THREE.Mesh(
+    new THREE.BoxGeometry(.25,5.5,.3),
+    index===0?metal:wood
+   );
+
+   pillar.position.set(x,-.1,z);
+   pillar.castShadow=true;
+   group.add(pillar);
+  });
+
+  const beam=new THREE.Mesh(
+   new THREE.BoxGeometry(5.6,.25,.3),
+   index===0?metal:wood
+  );
+
+  beam.position.set(0,2.65,z);
+  group.add(beam);
+ }
+
+ // Railway
+ for(const x of [-.7,.7]){
+
+  const rail=new THREE.Mesh(
+   new THREE.BoxGeometry(.12,.12,60),
+   metal
+  );
+
+  rail.position.set(x,-2.68,-30);
+  group.add(rail);
+ }
+
+ for(let z=2;z>-60;z-=1.5){
+
+  const sleeper=new THREE.Mesh(
+   new THREE.BoxGeometry(2,.12,.3),
+   wood
+  );
+
+  sleeper.position.set(0,-2.75,z);
+  group.add(sleeper);
+ }
+
+ // Mine lights
+ for(let z=-3;z>-60;z-=10){
+
+  const lamp=new THREE.PointLight(
+   0xffbd75,45,14
+  );
+
+  lamp.position.set(0,2,z);
+  group.add(lamp);
+
+  const bulb=new THREE.Mesh(
+   new THREE.SphereGeometry(.12,12,12),
+   new THREE.MeshBasicMaterial({color:0xffd18b})
+  );
+
+  bulb.position.set(0,2,z);
+  group.add(bulb);
+ }
+
+ // Rocky details
+ for(let i=0;i<130;i++){
+
+  const angle=Math.random()*Math.PI*2;
+
+  const stone=new THREE.Mesh(
+   new THREE.DodecahedronGeometry(.4,0),
+   new THREE.MeshStandardMaterial({
+    color:0x62594e,
+    roughness:1
+   })
+  );
+
+  stone.position.set(
+   Math.cos(angle)*2.85,
+   Math.sin(angle)*2.85,
+   -Math.random()*60
+  );
+
+  stone.scale.setScalar(.4+Math.random()*.7);
+  group.add(stone);
+ }
+
+ // ===================================
+ // MINERAL DEPOSITS AT THE MINING FACE
+ // Decorative crystal and ore clusters.
+ // Kept near the side walls so the centre path stays clear.
+ // ===================================
+
+ const mineralTypes=[
+  {color:0x35c9b5,emissive:0x073f38,name:'Copper ore'},
+  {color:0x9b72d5,emissive:0x291344,name:'Amethyst'},
+  {color:0xe0b84f,emissive:0x49300a,name:'Gold ore'},
+  {color:0x48a66b,emissive:0x12351d,name:'Emerald'},
+  {color:0xb9d7e8,emissive:0x263d4a,name:'Quartz'}
+ ];
+
+ // Build several sparkling mineral veins at the tunnel end.
+ for(let vein=0;vein<5;vein++){
+  const type=mineralTypes[vein];
+  const veinGroup=new THREE.Group();
+  const side=vein%2===0?-1:1;
+  veinGroup.position.set(side*2.35,-1.15,-51-vein*.9);
+  veinGroup.rotation.z=side===-1?-.18:.18;
+
+  const oreMaterial=new THREE.MeshStandardMaterial({
+   color:type.color,
+   emissive:type.emissive,
+   emissiveIntensity:.32,
+   metalness:.42,
+   roughness:.3
+  });
+
+  for(let crystal=0;crystal<7;crystal++){
+   const height=.45+Math.random()*.95;
+   const crystalMesh=new THREE.Mesh(
+    new THREE.ConeGeometry(.16+Math.random()*.12,height,5),
+    oreMaterial
+   );
+   crystalMesh.position.set(
+    randomOffset(-.65,.65),
+    crystal*.015+Math.random()*.45,
+    randomOffset(-.55,.55)
+   );
+   crystalMesh.rotation.z=(Math.random()-.5)*.65;
+   crystalMesh.rotation.x=(Math.random()-.5)*.5;
+   crystalMesh.castShadow=true;
+   veinGroup.add(crystalMesh);
+  }
+
+  // Small metallic ore chunks at the base of each vein.
+  for(let nugget=0;nugget<5;nugget++){
+   const chunk=new THREE.Mesh(
+    new THREE.DodecahedronGeometry(.13+Math.random()*.12,0),
+    oreMaterial
+   );
+   chunk.position.set(
+    randomOffset(-.65,.65),
+    -.55+Math.random()*.18,
+    randomOffset(-.5,.5)
+   );
+   chunk.rotation.set(Math.random(),Math.random(),Math.random());
+   veinGroup.add(chunk);
+  }
+
+  group.add(veinGroup);
+ }
+
+ // Small warm work-face lights make the ore deposits visible.
+ const oreGlowA=new THREE.PointLight(0x69d8c4,1.8,9);
+ oreGlowA.position.set(-1.8,.2,-52);
+ group.add(oreGlowA);
+
+ const oreGlowB=new THREE.PointLight(0xe3b65a,1.5,8);
+ oreGlowB.position.set(1.8,.1,-54);
+ group.add(oreGlowB);
+
+ function randomOffset(min,max){
+  return min+Math.random()*(max-min);
+ }
+
+ // Emergency beacon near the work area at the far end.
+ // It flashes red when this tunnel detects an anomaly.
+ const alarmBeacon=new THREE.Group();
+ alarmBeacon.position.set(0,2.0,-53);
+
+ const beaconBase=new THREE.Mesh(
+  new THREE.CylinderGeometry(.35,.45,.22,16),
+  metal
+ );
+ alarmBeacon.add(beaconBase);
+
+ const beaconBulb=new THREE.Mesh(
+  new THREE.SphereGeometry(.28,16,16),
+  new THREE.MeshBasicMaterial({color:0x334155})
+ );
+ beaconBulb.position.y=.32;
+ alarmBeacon.add(beaconBulb);
+
+ // Main beacon now illuminates a much longer section of tunnel.
+ const beaconLight=new THREE.PointLight(0xff0000,0,48);
+ beaconLight.position.y=.35;
+ alarmBeacon.add(beaconLight);
+
+ // Secondary red spill light spreads the emergency signal farther
+ // toward the tunnel entrance.
+ const redSpillLight=new THREE.PointLight(0xff1010,0,34);
+ redSpillLight.position.set(0,-1.0,13);
+ alarmBeacon.add(redSpillLight);
+
+ group.add(alarmBeacon);
+
+ // Tunnel entrance label
+ const label=makeLabel('TUNNEL '+['A','B','C'][index]);
+ label.position.set(0,3.7,2);
+ group.add(label);
+
+ scene.add(group);
+ tunnels.push(group);
+ tunnelSafety[index]={
+  beaconBulb,
+  beaconLight,
+  redSpillLight,
+  alarmOn:false,
+  phase:0
+ };
+
+ // Charging stations
+ for(let z=-8;z>=-56;z-=12){
+
+  const station=new THREE.Group();
+
+  // Platform
+  const platform=new THREE.Mesh(
+   new THREE.BoxGeometry(1.8,.18,2),
+   new THREE.MeshStandardMaterial({
+    color:0x168447,
+    metalness:.5,
+    roughness:.4
+   })
+  );
+
+  platform.position.y=-2.65;
+  station.add(platform);
+
+  // Charging column
+  const column=new THREE.Mesh(
+   new THREE.BoxGeometry(.3,1.4,.3),
+   metal
+  );
+
+  column.position.set(.65,-1.85,0);
+  station.add(column);
+
+  // Charging light
+  const indicator=new THREE.Mesh(
+   new THREE.SphereGeometry(.14,12,12),
+   new THREE.MeshBasicMaterial({
+    color:0x00ff66
+   })
+  );
+
+  indicator.position.set(.65,-1.05,0);
+  station.add(indicator);
+
+  const glow=new THREE.PointLight(0x00ff66,1.5,5);
+  glow.position.set(0,-1.5,0);
+  station.add(glow);
+
+  const stationLabel=makeLabel('CHARGING POINT');
+  stationLabel.position.set(0,.4,0);
+  station.add(stationLabel);
+
+  // World position
+  station.position.set(2,-0.0,z);
+  group.add(station);
+
+  allStations.push({
+   position:new THREE.Vector3(centerX+2,-1.5,z),
+   object:station,
+   indicator,
+   tunnel:index,
+   busy:false
+  });
+ }
+
+ return group;
+}
+
+// All three tunnels in one scene
+for(let i=0;i<3;i++){
+ createTunnel(i);
+}
+
+// ===================================
+// DRONE MODEL
+// ===================================
+
+function createDrone(){
+
+ const drone=new THREE.Group();
+
+ const body=new THREE.Mesh(
+  new THREE.BoxGeometry(.65,.22,.8),
+  new THREE.MeshStandardMaterial({
+   color:0x242a31,
+   metalness:.7,
+   roughness:.3
+  })
+ );
+
+ drone.add(body);
+
+ const lens=new THREE.Mesh(
+  new THREE.SphereGeometry(.13,16,16),
+  new THREE.MeshStandardMaterial({
+   color:0x111111,
+   metalness:1
+  })
+ );
+
+ lens.position.set(0,-.04,-.43);
+ drone.add(lens);
+
+ const propellers=[];
+
+ for(const x of [-1,1]){
+  for(const z of [-1,1]){
+
+   const arm=new THREE.Mesh(
+    new THREE.BoxGeometry(.65,.07,.07),
+    metal
+   );
+
+   arm.position.set(x*.4,0,z*.4);
+   drone.add(arm);
+
+   const prop=new THREE.Mesh(
+    new THREE.BoxGeometry(.65,.025,.1),
+    new THREE.MeshBasicMaterial({
+     color:0xaaaaaa
+    })
+   );
+
+   prop.position.set(x*.65,.15,z*.65);
+   drone.add(prop);
+
+   propellers.push(prop);
+  }
+ }
+
+ function addLight(x,color){
+
+  const bulb=new THREE.Mesh(
+   new THREE.SphereGeometry(.07,12,12),
+   new THREE.MeshBasicMaterial({color})
+  );
+
+  bulb.position.set(x,.12,0);
+  drone.add(bulb);
+ }
+
+ addLight(-.35,0xff2222);
+ addLight(.35,0x22ff66);
+
+ drone.userData.propellers=propellers;
+
+ return drone;
+}
+
+// ===================================
+// WORKER MODELS AND EVACUATION
+// ===================================
+
+const WORKER_WORK_ZONE_Z=-53.2; // workers stand right beside the mineral deposits at the tunnel face
+const WORKER_EXIT_Z=3;
+const WORKER_SPEED=2.2;
+const workersByTunnel=[[],[],[]];
+
+function createWorkerModel(){
+
+ const worker=new THREE.Group();
+
+ const uniform=new THREE.MeshStandardMaterial({color:0xe0a52f,roughness:.8});
+ const dark=new THREE.MeshStandardMaterial({color:0x263238,roughness:.8});
+ const skin=new THREE.MeshStandardMaterial({color:0xc58b62,roughness:.9});
+ const helmetMat=new THREE.MeshStandardMaterial({color:0xffd54f,roughness:.6});
+
+ const torso=new THREE.Mesh(new THREE.BoxGeometry(.34,.55,.20),uniform);
+ torso.position.y=.95;
+ worker.add(torso);
+
+ const head=new THREE.Mesh(new THREE.SphereGeometry(.14,12,12),skin);
+ head.position.y=1.32;
+ worker.add(head);
+
+ const helmet=new THREE.Mesh(new THREE.SphereGeometry(.16,12,8,0,Math.PI*2,0,Math.PI/2),helmetMat);
+ helmet.position.y=1.39;
+ worker.add(helmet);
+
+ const legs=[];
+ for(const x of [-.10,.10]){
+  const leg=new THREE.Mesh(new THREE.BoxGeometry(.12,.42,.13),dark);
+  leg.position.set(x,.43,0);
+  worker.add(leg);
+  legs.push(leg);
+ }
+
+ const arms=[];
+ for(const x of [-.24,.24]){
+  const arm=new THREE.Mesh(new THREE.BoxGeometry(.10,.42,.11),uniform);
+  arm.position.set(x,.98,0);
+  worker.add(arm);
+  arms.push(arm);
+ }
+
+ // Simple pickaxe held by the worker to make the mining task visible.
+ const pickaxe=new THREE.Group();
+ const handle=new THREE.Mesh(
+  new THREE.CylinderGeometry(.035,.045,.78,8),
+  new THREE.MeshStandardMaterial({color:0x8b5a2b,roughness:.9})
+ );
+ handle.rotation.z=-.35;
+ handle.position.set(.34,.72,-.04);
+ pickaxe.add(handle);
+ const pickHead=new THREE.Mesh(
+  new THREE.BoxGeometry(.42,.09,.12),
+  new THREE.MeshStandardMaterial({color:0xb8c2cc,metalness:.7,roughness:.35})
+ );
+ pickHead.position.set(.47,1.02,-.04);
+ pickHead.rotation.z=-.12;
+ pickaxe.add(pickHead);
+ worker.add(pickaxe);
+
+ worker.userData.legs=legs;
+ worker.userData.torso=torso;
+ worker.userData.arms=arms;
+ worker.userData.pickaxe=pickaxe;
+ return worker;
+}
+
+function startWorkers(d){
+
+ const team=workersByTunnel[d.id];
+
+ // Do not create duplicate teams.
+ if(team.length && team.some(w=>w.state!=='SAFE_OUTSIDE')) return;
+
+ team.length=0;
+ const centerX=X_POSITIONS[d.id];
+
+ for(let i=0;i<3;i++){
+  const model=createWorkerModel();
+  model.position.set(centerX+(i-1)*1.05, -2.65, START_Z-1-i*1.2);
+  scene.add(model);
+
+  team.push({
+   model,
+   state:'WALKING_TO_WORK',
+   targetZ:WORKER_WORK_ZONE_Z,
+   walkPhase:Math.random()*Math.PI*2
+  });
+ }
+
+ d.workerStatus='Workers walking to work area';
+ updateWorkerUI(d);
+}
+
+function triggerEvacuation(d,reason){
+
+ const team=workersByTunnel[d.id];
+ if(!team.length) return;
+
+ let started=false;
+ for(const worker of team){
+  if(worker.state!=='EVACUATING' && worker.state!=='SAFE_OUTSIDE'){
+   worker.state='EVACUATING';
+   worker.targetZ=WORKER_EXIT_Z;
+   started=true;
+  }
+ }
+
+ if(started){
+  d.workerStatus='EMERGENCY EVACUATION';
+  d.evacuationReason=reason;
+  updateWorkerUI(d);
+ }
+}
+
+function updateWorkers(d,delta){
+
+ const team=workersByTunnel[d.id];
+ let moving=false;
+ let safeCount=0;
+
+ for(const worker of team){
+
+  if(worker.state==='SAFE_OUTSIDE'){
+   safeCount++;
+   continue;
+  }
+
+  const model=worker.model;
+  const dz=worker.targetZ-model.position.z;
+  const step=Math.min(Math.abs(dz),WORKER_SPEED*delta);
+  const direction=Math.sign(dz);
+
+  model.position.z+=direction*step;
+  model.rotation.y=direction<0?Math.PI:0;
+
+  if(step>0){
+   moving=true;
+   worker.walkPhase+=delta*9;
+   worker.model.userData.legs.forEach((leg,i)=>{
+    leg.rotation.x=Math.sin(worker.walkPhase+i*Math.PI)*.55;
+   });
+   worker.model.userData.arms.forEach((arm,i)=>{
+    arm.rotation.x=-Math.sin(worker.walkPhase+i*Math.PI)*.35;
+   });
+  }else if(worker.state==='WORKING'){
+   // Repeating pickaxe swing and upper-body movement while mining the ore face.
+   worker.walkPhase+=delta*5;
+   const swing=Math.sin(worker.walkPhase)*.9;
+   worker.model.userData.arms[1].rotation.x=-1.15+swing;
+   worker.model.userData.arms[0].rotation.x=-.55-swing*.45;
+   worker.model.userData.pickaxe.rotation.x=-.35+Math.max(0,Math.sin(worker.walkPhase))*-1.05;
+   worker.model.userData.torso.rotation.x=Math.max(0,Math.sin(worker.walkPhase))*.12;
+   worker.model.userData.legs.forEach(leg=>leg.rotation.x=0);
+  }
+
+  if(Math.abs(worker.targetZ-model.position.z)<.05){
+   if(worker.state==='EVACUATING'){
+    worker.state='SAFE_OUTSIDE';
+    model.visible=false;
+    safeCount++;
+   }else{
+    worker.state='WORKING';
+    worker.targetZ=WORKER_WORK_ZONE_Z;
+   }
+  }
+ }
+
+ if(team.length && safeCount===team.length){
+  d.workerStatus='ALL WORKERS SAFE OUTSIDE';
+ }else if(team.length && !moving && team.every(w=>w.state==='WORKING')){
+  d.workerStatus='Workers working at face';
+ }
+
+ // Only Tunnel B develops a simulated anomaly after workers begin working.
+ if(d.id===1 && !d.anomalyTriggered && team.length &&
+    team.every(w=>w.state==='WORKING')){
+  if(d.workStartTime===null) d.workStartTime=Date.now();
+  if(Date.now()-d.workStartTime>=10000){
+   d.anomalyTriggered=true;
+   d.sensorLevel='DANGER';
+   d.sensorMessages=['Sudden gas and temperature anomaly detected'];
+   d.sensors.methane=1.8; d.sensors.co=62; d.sensors.h2s=13;
+   d.sensors.oxygen=17.2; d.sensors.temperature=43;
+   d.workerRestricted=true;
+   triggerEvacuation(d,'Sudden gas and temperature anomaly');
+   updateSensorDashboard(d);
+  }
+ }
+ updateWorkerUI(d);
+}
+
+function updateWorkerUI(d){
+ const status=document.getElementById('worker-team-status-'+d.id);
+ if(status) status.textContent=d.workerStatus || 'No workers deployed';
+
+ const banner=document.getElementById('evacuation-banner');
+ const anyEvacuating=drones.some(x=>
+  workersByTunnel[x.id].some(w=>w.state==='EVACUATING')
+ );
+ const anySafe=drones.some(x=>x.workerStatus==='ALL WORKERS SAFE OUTSIDE');
+ if(anyEvacuating){
+  banner.style.display='block';
+  banner.textContent='🚨 TUNNEL B ALERT: WORKERS RETURNING TO TUNNEL B ENTRANCE';
+ }else if(anySafe){
+  banner.style.display='block';
+  banner.style.background='#166534';
+  banner.textContent='✓ WORKERS REACHED THE EXIT — ACCOUNT FOR ALL PERSONNEL';
+ }else{
+  banner.style.display='none';
+  banner.style.background='#991b1b';
+ }
+}
+
+// ===================================
+// THREE INDEPENDENT DRONES
+// ===================================
+
+const drones=[];
+
+function createDroneController(index){
+
+ const x=X_POSITIONS[index];
+
+ const model=createDrone();
+
+ scene.add(model);
+
+ model.position.set(x,0,START_Z);
+
+ const controller={
+
+  id:index,
+  name:['A','B','C'][index],
+
+  model,
+
+  position:new THREE.Vector3(x,0,START_Z),
+
+  routePosition:new THREE.Vector3(x,0,START_Z),
+
+  battery:100,
+
+  totalDistance:0,
+  totalBatteryUsed:0,
+  totalEnergyAdded:0,
+
+  speed:0,
+
+  running:false,
+
+  // idle, mission, divert, charging, resume
+  mode:'idle',
+
+  direction:-1,
+
+  station:null,
+
+  missionCount:0,
+
+  // Simulated environmental sensor data
+  sensors:{
+   methane:0.2,
+   co:5,
+   h2s:1,
+   oxygen:20.9,
+   temperature:27,
+   humidity:55,
+   dust:20
+  },
+  sensorLevel:'NORMAL',
+  sensorMessages:[],
+  workerRestricted:false,
+  safeReadingsSince:null,
+  adminChecked:false,
+  workStartTime:null,
+  anomalyTriggered:false
+ };
+
+ drones.push(controller);
+}
+
+for(let i=0;i<3;i++){
+ createDroneController(i);
+}
+
+// ===================================
+// DUMMY ENVIRONMENT SENSOR GENERATOR
+// Simulates a gas/temperature hotspot along each tunnel.
+// Replace this section with real sensor input for hardware.
+// ===================================
+
+function randomNoise(amount){
+ return (Math.random()-.5)*amount;
+}
+
+function clampValue(value,min,max){
+ return Math.max(min,Math.min(max,value));
+}
+
+function generateSensorData(d){
+
+ // Tunnel A and C are admin-inspected safe tunnels in this scenario.
+ // Tunnel B stays normal until its workers have been working for a while.
+ const s=d.sensors;
+ if(d.id===0 || d.id===2 || !d.anomalyTriggered){
+  s.methane=.20; s.co=5; s.h2s=1; s.oxygen=20.9;
+  s.temperature=27; s.humidity=55; s.dust=20;
+  d.sensorLevel='NORMAL';
+  d.sensorMessages=[];
+  if(d.id===1) analyseSensorData(d);
+  return;
+ }
+
+ // The B-tunnel anomaly is activated by the work-cycle logic below.
+ analyseSensorData(d);
+}
+
+// ===================================
+// ANOMALY DETECTION AND WORKER ACCESS
+// ===================================
+
+function analyseSensorData(d){
+
+ const s=d.sensors;
+ const L=SENSOR_CONFIG.demoLimits;
+ const warnings=[];
+ const critical=[];
+
+ if(s.methane>=L.methane.critical) critical.push('Critical methane reading');
+ else if(s.methane>=L.methane.warning) warnings.push('Methane is increasing');
+
+ if(s.co>=L.co.critical) critical.push('Critical carbon monoxide reading');
+ else if(s.co>=L.co.warning) warnings.push('Carbon monoxide is increasing');
+
+ if(s.h2s>=L.h2s.critical) critical.push('Critical hydrogen sulphide reading');
+ else if(s.h2s>=L.h2s.warning) warnings.push('Hydrogen sulphide is increasing');
+
+ if(s.oxygen<=L.oxygen.lowCritical) critical.push('Critical low oxygen reading');
+ else if(s.oxygen<=L.oxygen.lowWarning) warnings.push('Oxygen level is low');
+
+ if(s.temperature>=L.temperature.critical) critical.push('Critical temperature');
+ else if(s.temperature>=L.temperature.warning) warnings.push('Temperature is increasing');
+
+ if(critical.length>0) d.sensorLevel='DANGER';
+ else if(warnings.length>0) d.sensorLevel='WARNING';
+ else d.sensorLevel='NORMAL';
+
+ // Latch the restriction. Normal readings alone do not
+ // automatically reopen a tunnel.
+ if(d.sensorLevel!=='NORMAL' && d.id===1 && d.anomalyTriggered){
+  d.workerRestricted=true;
+  d.safeReadingsSince=null;
+  triggerEvacuation(d,critical.concat(warnings).join(', '));
+ }else if(d.workerRestricted && d.safeReadingsSince===null){
+  d.safeReadingsSince=Date.now();
+ }
+
+ d.sensorMessages=[...critical,...warnings];
+}
+
+// ===================================
+// UPDATE ENVIRONMENT SENSOR UI
+// ===================================
+
+function updateSensorDashboard(d){
+
+ const id=d.id;
+ const s=d.sensors;
+
+ const setText=(name,value)=>{
+  const el=document.getElementById(name+'-'+id);
+  if(el) el.textContent=value;
+ };
+
+ setText('methane',s.methane.toFixed(2)+'%');
+ setText('co',s.co.toFixed(1)+' ppm');
+ setText('h2s',s.h2s.toFixed(2)+' ppm');
+ setText('oxygen',s.oxygen.toFixed(2)+'%');
+ setText('temperature',s.temperature.toFixed(1)+' °C');
+ setText('humidity',s.humidity.toFixed(1)+'%');
+ setText('dust',s.dust.toFixed(1)+' µg/m³');
+
+ const status=document.getElementById('sensor-status-'+id);
+ const worker=document.getElementById('worker-status-'+id);
+ const alert=document.getElementById('sensor-alert-'+id);
+ const clearButton=document.getElementById('clear-restriction-'+id);
+
+ if(!status || !worker || !alert || !clearButton) return;
+
+ status.className='sensor-state '+d.sensorLevel.toLowerCase();
+
+ if(d.sensorLevel==='DANGER'){
+  status.textContent='DANGER — CRITICAL ANOMALY';
+ }else if(d.sensorLevel==='WARNING'){
+  status.textContent='WARNING — ABNORMAL READINGS';
+ }else{
+  status.textContent='NORMAL — READINGS STABLE';
+ }
+
+ if(d.workerRestricted){
+  worker.className='worker-state restricted';
+  worker.textContent='WORKERS: ACCESS RESTRICTED — DO NOT ENTER';
+  clearButton.style.display='inline-block';
+ }else{
+  worker.className='worker-state allowed';
+  worker.textContent='WORKERS: ACCESS ALLOWED (DEMO)';
+  clearButton.style.display='none';
+ }
+
+ if(d.sensorMessages.length){
+  alert.textContent='ALERT: '+d.sensorMessages.join(' | ');
+  alert.style.color='#ff8b8b';
+ }else if(d.workerRestricted){
+  alert.textContent='Readings are currently normal. Supervisor clearance is still required.';
+  alert.style.color='#ffd27a';
+ }else{
+  alert.textContent='No abnormal readings detected.';
+  alert.style.color='#86efac';
+ }
+}
+
+// ===================================
+// DASHBOARD CREATION
+// ===================================
+
+const cards=document.getElementById('cards');
+
+drones.forEach(d=>{
+
+ const card=document.createElement('div');
+
+ card.className='drone-card';
+
+ card.innerHTML=`
+
+ <h3>DRONE ${d.name} / TUNNEL ${d.name}</h3>
+
+ <div class="row">
+  <span>Battery health</span>
+  <b id="battery-${d.id}">100%</b>
+ </div>
+
+ <div class="battery">
+  <div class="battery-fill" id="batterybar-${d.id}"></div>
+ </div>
+
+ <div class="row">
+  <span>Operating status</span>
+  <b class="status" id="status-${d.id}">Standby</b>
+ </div>
+
+ <div class="row">
+  <span>Distance travelled</span>
+  <b id="distance-${d.id}">0 m</b>
+ </div>
+
+ <div class="row">
+  <span>Destination distance</span>
+  <b id="remaining-${d.id}">62 m</b>
+ </div>
+
+ <div class="row">
+  <span>Nearest charger</span>
+  <b id="charger-${d.id}">-- m</b>
+ </div>
+
+ <div class="row">
+  <span>Flight speed</span>
+  <b id="speed-${d.id}">0 m/s</b>
+ </div>
+
+ <div class="row">
+  <span>Battery consumed</span>
+  <b id="used-${d.id}">0%</b>
+ </div>
+
+ <div class="row">
+  <span>Energy charged</span>
+  <b id="charged-${d.id}">0%</b>
+ </div>
+
+ <div class="row">
+  <span>Charging time estimate</span>
+  <b id="chargeTime-${d.id}">0 sec</b>
+ </div>
+
+ <div class="row">
+  <span>Inspection progress</span>
+  <b id="progressText-${d.id}">0%</b>
+ </div>
+
+ <div class="progress">
+  <div class="progress-fill" id="progress-${d.id}"></div>
+ </div>
+
+ <div class="sensor-section">
+  <div class="sensor-heading">WORKER ACTIVITY</div>
+  <div class="row"><span>Worker team</span><b id="worker-team-status-${d.id}">No workers deployed</b></div>
+  <button class="small worker-btn" id="start-workers-${d.id}">ADMIN: CHECK TUNNEL & APPROVE WORK</button>
+ </div>
+
+ <div class="sensor-section">
+  <div class="sensor-heading">ENVIRONMENTAL SENSOR MONITOR</div>
+
+  <div class="row"><span>Methane (CH₄)</span><b id="methane-${d.id}">0.20%</b></div>
+  <div class="row"><span>Carbon Monoxide (CO)</span><b id="co-${d.id}">5 ppm</b></div>
+  <div class="row"><span>Hydrogen Sulphide (H₂S)</span><b id="h2s-${d.id}">1 ppm</b></div>
+  <div class="row"><span>Oxygen (O₂)</span><b id="oxygen-${d.id}">20.90%</b></div>
+  <div class="row"><span>Temperature</span><b id="temperature-${d.id}">27 °C</b></div>
+  <div class="row"><span>Humidity</span><b id="humidity-${d.id}">55%</b></div>
+  <div class="row"><span>Dust (PM2.5)</span><b id="dust-${d.id}">20 µg/m³</b></div>
+
+  <div id="sensor-status-${d.id}" class="sensor-state normal">
+   NORMAL — READINGS STABLE
+  </div>
+
+  <div id="worker-status-${d.id}" class="worker-state allowed">
+   WORKERS: ACCESS ALLOWED (DEMO)
+  </div>
+
+  <div id="sensor-alert-${d.id}" class="sensor-message">
+   No abnormal readings detected.
+  </div>
+
+  <button class="small clearance-btn" id="clear-restriction-${d.id}">
+   SUPERVISOR CLEARANCE (DEMO)
+  </button>
+
+  <div class="demo-note">
+   Simulated sensor values only. Demo thresholds are not certified mine-safety limits.
+  </div>
+ </div>
+
+ <div class="controls" style="margin-top:10px">
+  <button class="start small" id="start-${d.id}">START</button>
+  <button class="stop small" id="stop-${d.id}">STOP</button>
+ </div>
+ `;
+
+ cards.appendChild(card);
+
+ document.getElementById('start-'+d.id)
+  .onclick=()=>startDrone(d);
+
+ document.getElementById('stop-'+d.id)
+  .onclick=()=>stopDrone(d);
+
+ document.getElementById('start-workers-'+d.id)
+  .onclick=()=>{
+   if(d.workerRestricted || d.sensorLevel!=='NORMAL'){
+    alert('Admin check failed: do not send workers into this tunnel.');
+    return;
+   }
+   // First click represents the admin's pre-entry inspection and approval.
+   d.adminChecked=true;
+   const adminButton=document.getElementById('start-workers-'+d.id);
+   adminButton.textContent='✓ ADMIN CHECKED — WORKERS APPROVED';
+   adminButton.disabled=true;
+   d.workerStatus='Admin inspection passed — deploying workers';
+   startWorkers(d);
+  };
+
+ document.getElementById('clear-restriction-'+d.id)
+  .onclick=()=>{
+
+   const safeLongEnough=
+    d.safeReadingsSince!==null &&
+    Date.now()-d.safeReadingsSince>=SENSOR_CONFIG.safeClearanceMs;
+
+   if(d.sensorLevel!=='NORMAL' || !safeLongEnough){
+    alert(
+     'Clearance denied. Sensor readings must remain normal '+
+     'for at least 10 seconds in this demo.'
+    );
+    return;
+   }
+
+   d.workerRestricted=false;
+   d.safeReadingsSince=null;
+   updateSensorDashboard(d);
+
+   alert('Tunnel '+d.name+': demo restriction cleared.');
+  };
+
+ updateSensorDashboard(d);
+});
+
+// ===================================
+// DISTANCE AND BATTERY LOGIC
+// ===================================
+
+function nearestStation(d){
+
+ let nearest=null;
+ let shortest=Infinity;
+
+ for(const station of allStations){
+
+  if(station.tunnel!==d.id)continue;
+  if(station.busy)continue;
+
+  const distance=d.position.distanceTo(
+   station.position
+  );
+
+  // Reserve enough battery to reach the charger
+  const requiredBattery=
+   distance*CONFIG.batteryDrain+2;
+
+  if(requiredBattery>d.battery)continue;
+
+  if(distance<shortest){
+   shortest=distance;
+   nearest=station;
+  }
+ }
+
+ return nearest;
+}
+
+// ===================================
+// MOVEMENT FUNCTION
+// ===================================
+
+function moveDrone(d,target,delta,consume=true){
+
+ const distance=d.position.distanceTo(target);
+
+ if(distance<.05){
+  d.position.copy(target);
+  d.speed=0;
+  return true;
+ }
+
+ const step=Math.min(
+  CONFIG.droneSpeed*delta,
+  distance
+ );
+
+ const direction=target.clone()
+  .sub(d.position)
+  .normalize();
+
+ d.position.addScaledVector(direction,step);
+
+ d.totalDistance+=step;
+
+ if(consume){
+
+  const used=step*CONFIG.batteryDrain;
+
+  d.battery=Math.max(0,d.battery-used);
+  d.totalBatteryUsed+=used;
+ }
+
+ d.speed=step/delta;
+
+ d.model.position.copy(d.position);
+
+ // Face travel direction
+ d.model.rotation.y=Math.atan2(
+  direction.x,
+  direction.z
+ );
+
+ d.model.userData.propellers.forEach(p=>{
+  p.rotation.y+=delta*35;
+ });
+
+ return d.position.distanceTo(target)<.05;
+}
+
+// ===================================
+// AUTOMATIC CHARGING
+// ===================================
+
+function divertToCharger(d){
+
+ const station=nearestStation(d);
+
+ if(!station){
+
+  d.running=false;
+  d.mode='idle';
+  return;
+ }
+
+ d.station=station;
+ station.busy=true;
+
+ // Save exact route position
+ d.routePosition.copy(d.position);
+
+ d.mode='divert';
+}
+
+function beginCharging(d){
+
+ d.mode='charging';
+ d.speed=0;
+
+ d.station.indicator.material.color.set(0x00ff66);
+
+ document.getElementById('status-'+d.id)
+  .textContent='Charging';
+}
+
+function finishCharging(d){
+
+ d.station.busy=false;
+ d.station.indicator.material.color.set(0x00ff66);
+
+ d.mode='resume';
+
+ d.station=null;
+}
+
+function updateDrone(d,delta){
+
+ if(!d.running)return;
+
+ // Automatically divert at low battery
+ if(d.mode==='mission' &&
+    d.battery<=CONFIG.lowBattery){
+
+  divertToCharger(d);
+ }
+
+ // Normal tunnel inspection
+ if(d.mode==='mission'){
+
+  const target=d.direction===-1
+   ? new THREE.Vector3(d.position.x,0,END_Z)
+   : new THREE.Vector3(d.position.x,0,START_Z);
+
+  if(moveDrone(d,target,delta,true)){
+
+   d.direction*=-1;
+   d.missionCount++;
+  }
+ }
+
+ // Fly to nearest charging point
+ else if(d.mode==='divert'){
+
+  if(!d.station){
+   d.running=false;
+   return;
+  }
+
+  if(moveDrone(d,d.station.position,delta,true)){
+   beginCharging(d);
+  }
+ }
+
+ // Charging process
+ else if(d.mode==='charging'){
+
+  const previous=d.battery;
+
+  d.battery=Math.min(
+   CONFIG.fullBattery,
+   d.battery+CONFIG.chargeRate*delta
+  );
+
+  d.totalEnergyAdded+=d.battery-previous;
+
+  if(d.battery>=100){
+   d.battery=100;
+   finishCharging(d);
+  }
+ }
+
+ // Return to the exact interrupted route position
+ else if(d.mode==='resume'){
+
+  if(moveDrone(d,d.routePosition,delta,false)){
+
+   d.mode='mission';
+
+   document.getElementById('status-'+d.id)
+    .textContent='Inspection resumed';
+  }
+ }
+
+ updateDashboard(d);
+}
+
+// ===================================
+// LIVE DASHBOARD
+// ===================================
+
+function updateDashboard(d){
+
+ const id=d.id;
+
+ let remaining=0;
+
+ if(d.mode==='mission'){
+
+  const targetZ=d.direction===-1
+   ? END_Z
+   : START_Z;
+
+  remaining=Math.abs(d.position.z-targetZ);
+ }
+
+ if(d.mode==='divert' && d.station){
+  remaining=d.position.distanceTo(d.station.position);
+ }
+
+ if(d.mode==='resume'){
+  remaining=d.position.distanceTo(d.routePosition);
+ }
+
+ let nearest=Infinity;
+
+ for(const s of allStations){
+
+  if(s.tunnel!==id || s.busy)continue;
+
+  nearest=Math.min(
+   nearest,d.position.distanceTo(s.position)
+  );
+ }
+
+ const estimatedChargeTime=
+  (100-d.battery)/CONFIG.chargeRate;
+
+ const progress=THREE.MathUtils.clamp(
+  (START_Z-d.position.z)/(START_Z-END_Z)*100,
+  0,100
+ );
+
+ document.getElementById('battery-'+id)
+  .textContent=d.battery.toFixed(1)+'%';
+
+ const bar=document.getElementById('batterybar-'+id);
+
+ bar.style.width=d.battery+'%';
+
+ bar.style.background=
+  d.battery<=CONFIG.lowBattery?'#ff3838':
+  d.battery<50?'#ffb52e':'#35d878';
+
+ document.getElementById('distance-'+id)
+  .textContent=d.totalDistance.toFixed(2)+' m';
+
+ document.getElementById('remaining-'+id)
+  .textContent=remaining.toFixed(2)+' m';
+
+ document.getElementById('charger-'+id)
+  .textContent=Number.isFinite(nearest)
+   ?nearest.toFixed(2)+' m':'--';
+
+ document.getElementById('speed-'+id)
+  .textContent=d.speed.toFixed(2)+' m/s';
+
+ document.getElementById('used-'+id)
+  .textContent=d.totalBatteryUsed.toFixed(2)+'%';
+
+ document.getElementById('charged-'+id)
+  .textContent=d.totalEnergyAdded.toFixed(2)+'%';
+
+ document.getElementById('chargeTime-'+id)
+  .textContent=estimatedChargeTime.toFixed(1)+' sec';
+
+ document.getElementById('progress-'+id)
+  .style.width=progress+'%';
+
+ document.getElementById('progressText-'+id)
+  .textContent=progress.toFixed(1)+'%';
+
+ const status={
+  idle:'Stopped',
+  mission:'Inspecting',
+  divert:'Going to charger',
+  charging:'Charging',
+  resume:'Returning to route'
+ };
+
+ document.getElementById('status-'+id)
+  .textContent=status[d.mode];
+
+ updateSensorDashboard(d);
+}
+
+// ===================================
+// USER CONTROLS
+// ===================================
+
+function startDrone(d){
+
+ if(d.running)return;
+
+ d.running=true;
+
+ if(d.mode==='idle'){
+  d.mode='mission';
+ }
+
+ updateDashboard(d);
+}
+
+function stopDrone(d){
+
+ d.running=false;
+ d.speed=0;
+
+ // Keep charging station reservation and mode
+ // so the drone can resume correctly.
+
+ updateDashboard(d);
+}
+
+window.startAll=function(){
+ drones.forEach(startDrone);
+};
+
+window.stopAll=function(){
+ drones.forEach(stopDrone);
+};
+
+// ===================================
+// CAMERA: 360° ORBIT + ZOOM + PAN
+// ===================================
+
+const target=new THREE.Vector3(0,0,-27);
+
+let yaw=0;
+let pitch=.18;
+let radius=49;
+
+let dragging=false;
+let rightDragging=false;
+let previousX=0;
+let previousY=0;
+
+function updateCamera(){
+
+ const cp=Math.cos(pitch);
+
+ camera.position.set(
+  target.x+radius*Math.sin(yaw)*cp,
+  target.y+radius*Math.sin(pitch),
+  target.z+radius*Math.cos(yaw)*cp
+ );
+
+ camera.lookAt(target);
+}
+
+updateCamera();
+
+renderer.domElement.addEventListener('contextmenu',e=>{
+ e.preventDefault();
+});
+
+renderer.domElement.addEventListener('pointerdown',e=>{
+
+ dragging=true;
+ rightDragging=e.button===2;
+
+ previousX=e.clientX;
+ previousY=e.clientY;
+
+ renderer.domElement.setPointerCapture(e.pointerId);
+});
+
+renderer.domElement.addEventListener('pointerup',()=>{
+ dragging=false;
+});
+
+renderer.domElement.addEventListener('pointermove',e=>{
+
+ if(!dragging)return;
+
+ const dx=e.clientX-previousX;
+ const dy=e.clientY-previousY;
+
+ previousX=e.clientX;
+ previousY=e.clientY;
+
+ if(rightDragging){
+
+  target.x-=dx*.025;
+  target.y+=dy*.025;
+
+ }else{
+
+  yaw-=dx*.005;
+  pitch+=dy*.005;
+
+  pitch=THREE.MathUtils.clamp(
+   pitch,-1.2,1.2
+  );
+ }
+
+ updateCamera();
+});
+
+renderer.domElement.addEventListener('wheel',e=>{
+
+ radius=THREE.MathUtils.clamp(
+  radius+e.deltaY*.04,
+  22,100
+ );
+
+ updateCamera();
+});
+
+// ===================================
+// ANIMATION
+// ===================================
+
+const clock=new THREE.Clock();
+let sensorElapsed=0;
+
+function animate(){
+
+ requestAnimationFrame(animate);
+
+ const delta=Math.min(clock.getDelta(),.05);
+
+ for(const d of drones){
+  updateDrone(d,delta);
+  updateWorkers(d,delta);
+ }
+
+ // Flash the red emergency beacon at the work end of each tunnel.
+ for(let i=0;i<tunnelSafety.length;i++){
+  const safety=tunnelSafety[i];
+  const active=drones[i].workerRestricted ||
+   workersByTunnel[i].some(w=>w.state==='EVACUATING');
+  safety.alarmOn=active;
+  if(active){
+   safety.phase+=delta*7;
+   const pulse=(Math.sin(safety.phase)+1)/2;
+   safety.beaconBulb.material.color.setRGB(1,0.03+0.12*pulse,0.03);
+   safety.beaconLight.intensity=4+9*pulse;
+   safety.redSpillLight.intensity=1.5+4.5*pulse;
+  }else{
+   safety.beaconBulb.material.color.set(0x334155);
+   safety.beaconLight.intensity=0;
+   safety.redSpillLight.intensity=0;
+  }
+ }
+
+ // Simulate a fresh sensor packet every second.
+ // Sensor packets continue even if a drone is paused.
+ sensorElapsed+=delta;
+ if(sensorElapsed>=SENSOR_CONFIG.updateInterval/1000){
+  sensorElapsed=0;
+  for(const d of drones){
+   generateSensorData(d);
+   updateSensorDashboard(d);
+  }
+ }
+
+ renderer.render(scene,camera);
+}
+
+animate();
+
+// ===================================
+// RESIZE
+// ===================================
+
+window.addEventListener('resize',()=>{
+
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+
+ renderer.setSize(innerWidth,innerHeight);
+});
+
+</script>
+</body>
+</html>
