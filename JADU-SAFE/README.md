@@ -1,6 +1,6 @@
 # JADU-SAFE: Phase 1 foundation
 
-**Wokwi ESP32 → FastAPI → SQLite/MySQL → React dashboard**
+**Wokwi ESP32 → FastAPI → MySQL → React dashboard**
 
 A software simulation of underground-mine environmental monitoring. All readings are synthetic and all
 thresholds are demonstration values, **not** official AERB/ICRP/occupational safety limits.
